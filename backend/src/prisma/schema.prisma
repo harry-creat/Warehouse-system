@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  username     String        @unique
+  email        String        @unique
+  passwordHash String
+  role         String        @default("OPERATOR")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+}
+
+model Product {
+  id            String       @id @default(cuid())
+  sku           String       @unique
+  name          String
+  category      String
+  unit          String       @default("pcs")
+  unitPrice     Decimal      @default(0)
+  description   String?
+  minStockLevel Int          @default(10)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  inventory     Inventory?
+  transactions  Transaction[]
+}
+
+model Inventory {
+  id                String    @id @default(cuid())
+  productId         String    @unique
+  product           Product   @relation(fields: [productId], references: [id])
+  warehouseLocation String    @default("A-01")
+  currentQuantity   Int       @default(0)
+  reservedQuantity  Int       @default(0)
+  lastUpdatedAt     DateTime  @updatedAt
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  type        String
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Int
+  unitPrice   Decimal
+  totalAmount Decimal
+  operator    String
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  note        String?
+  sourceFile  String?
+  batchId     String?
+  createdAt   DateTime @default(now())
+}
+
+model UploadRecord {
+  id           String   @id @default(cuid())
+  filename     String
+  originalName String
+  fileType     String
+  fileSize     Int
+  status       String   @default("PROCESSED")
+  parsedRows   Int      @default(0)
+  successRows  Int      @default(0)
+  failedRows   Int      @default(0)
+  errorLog     String?
+  uploadedBy   String
+  createdAt    DateTime @default(now())
+}

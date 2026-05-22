@@ -1,0 +1,549 @@
+You are a senior full-stack engineer working inside VS Code via Claude Code.
+Your job is to scaffold and implement a complete, production-ready
+Warehouse Management System from scratch in the current workspace.
+
+IMPORTANT RULES:
+- Create every file with full working code immediately
+- Never write placeholder comments like "// TODO" or "// add logic here"
+- Never leave any function body empty
+- After creating all files, run install commands automatically
+- All code must be runnable with zero manual editing
+
+═══════════════════════════════════════════════════════
+STEP 0 — SCAFFOLD PROJECT FIRST
+═══════════════════════════════════════════════════════
+Run these shell commands before writing any code:
+
+mkdir -p warehouse-wms
+cd warehouse-wms
+mkdir -p backend/src/{config,middleware,modules/{auth,products,inventory,transactions,upload/parsers},utils,prisma}
+mkdir -p frontend/src/{api,store,pages,components/{layout,upload,inventory,charts,common},hooks,types,utils}
+mkdir -p shared/schemas
+
+═══════════════════════════════════════════════════════
+PROJECT OVERVIEW
+═══════════════════════════════════════════════════════
+System name    : WMS — Warehouse Management System (仓库管理系统)
+Core purpose   : Users upload order sheets (Excel / CSV / PDF) to
+                 automatically trigger stock-in (入库) or stock-out (出库),
+                 update inventory records, and view real-time statistics
+                 including quantity, unit price, and total asset value.
+
+═══════════════════════════════════════════════════════
+TECH STACK
+═══════════════════════════════════════════════════════
+Backend
+  Runtime    : Node.js 20 + Express 4 + TypeScript
+  ORM        : Prisma 5  (SQLite for dev, PostgreSQL-compatible schema)
+  Auth       : JWT — access token 15 min + refresh token 7 days
+  Validation : Zod (schemas shared with frontend via /shared)
+  File upload: Multer  (accept .xlsx .xls .csv .pdf)
+  Parsing    : SheetJS/xlsx  for Excel & CSV
+               pdf-parse     for PDF
+  Logging    : Winston
+
+Frontend
+  Framework  : React 18 + TypeScript + Vite 5
+  UI library : Tailwind CSS 3 + shadcn/ui
+  State      : Zustand 4
+  Data fetch : Axios + TanStack React Query v5
+  Charts     : Recharts 2
+  File parse : SheetJS (client-side preview before upload)
+
+═══════════════════════════════════════════════════════
+COMPLETE FILE LIST — implement every file below
+═══════════════════════════════════════════════════════
+
+── BACKEND ────────────────────────────────────────────
+
+backend/package.json
+  dependencies: express, prisma, @prisma/client, zod, jsonwebtoken,
+                bcryptjs, multer, xlsx, pdf-parse, winston, cors, dotenv
+  devDependencies: typescript, ts-node-dev, @types/*
+  scripts: dev, build, start, db:migrate, db:seed
+
+backend/tsconfig.json
+  strict mode, esModuleInterop, outDir: dist
+
+backend/.env.example
+  DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET,
+  PORT, UPLOAD_DIR, MAX_FILE_SIZE_MB
+
+backend/prisma/schema.prisma
+  Implement ALL models below exactly:
+
+  model User {
+    id           String   @id @default(cuid())
+    username     String   @unique
+    email        String   @unique
+    passwordHash String
+    role         Role     @default(OPERATOR)
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+    transactions Transaction[]
+  }
+
+  enum Role { ADMIN OPERATOR VIEWER }
+
+  model Product {
+    id            String   @id @default(cuid())
+    sku           String   @unique
+    name          String
+    category      String
+    unit          String
+    unitPrice     Decimal
+    description   String?
+    minStockLevel Int      @default(10)
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+    inventory     Inventory?
+    transactions  Transaction[]
+  }
+
+  model Inventory {
+    id                String   @id @default(cuid())
+    productId         String   @unique
+    product           Product  @relation(fields: [productId], references: [id])
+    warehouseLocation String   @default("A-01")
+    currentQuantity   Int      @default(0)
+    reservedQuantity  Int      @default(0)
+    lastUpdatedAt     DateTime @updatedAt
+  }
+
+  model Transaction {
+    id          String          @id @default(cuid())
+    type        TransactionType
+    productId   String
+    product     Product         @relation(fields: [productId], references: [id])
+    quantity    Int
+    unitPrice   Decimal
+    totalAmount Decimal
+    operator    String
+    userId      String?
+    user        User?           @relation(fields: [userId], references: [id])
+    note        String?
+    sourceFile  String?
+    batchId     String?
+    createdAt   DateTime        @default(now())
+  }
+
+  enum TransactionType { STOCK_IN STOCK_OUT ADJUSTMENT }
+
+  model UploadRecord {
+    id           String   @id @default(cuid())
+    filename     String
+    originalName String
+    fileType     String
+    fileSize     Int
+    status       String
+    parsedRows   Int      @default(0)
+    successRows  Int      @default(0)
+    failedRows   Int      @default(0)
+    errorLog     String?
+    uploadedBy   String
+    createdAt    DateTime @default(now())
+  }
+
+backend/src/index.ts
+  - Express app with cors, json, urlencoded middleware
+  - Mount all routers under /api/v1
+  - Global error handler last
+  - Listen on PORT from env
+  - Log startup info with Winston
+
+backend/src/config/env.ts
+  - Parse and validate all env vars with Zod
+  - Export typed config object
+  - Exit process with error if validation fails
+
+backend/src/utils/jwt.ts
+  - generateAccessToken(userId, role)
+  - generateRefreshToken(userId)
+  - verifyAccessToken(token)
+  - verifyRefreshToken(token)
+
+backend/src/utils/response.ts
+  - successResponse(res, data, message, statusCode)
+  - errorResponse(res, message, statusCode, errors?)
+
+backend/src/utils/logger.ts
+  - Winston logger with console + file transports
+  - Separate error.log and combined.log
+
+backend/src/middleware/auth.ts
+  - Verify Bearer JWT from Authorization header
+  - Attach decoded user to req.user
+  - Return 401 if missing or invalid
+
+backend/src/middleware/errorHandler.ts
+  - Catch Prisma errors and map to readable messages
+  - Catch Zod validation errors and format field errors
+  - Catch JWT errors
+  - Return consistent JSON error shape
+
+backend/src/middleware/upload.ts
+  - Multer diskStorage to UPLOAD_DIR
+  - Accept only: .xlsx .xls .csv .pdf
+  - Max file size from config
+  - Unique filename with timestamp + original name
+
+backend/src/modules/auth/auth.service.ts
+  - register(username, email, password, role)
+  - login(email, password) → { accessToken, refreshToken, user }
+  - refreshToken(refreshToken) → { accessToken }
+  - hashPassword / comparePassword with bcryptjs
+
+backend/src/modules/auth/auth.controller.ts
+  - POST /register
+  - POST /login
+  - POST /refresh
+  - POST /logout
+
+backend/src/modules/products/products.service.ts
+  - createProduct(data)
+  - getProducts(page, limit, search, category)
+  - getProductById(id)
+  - updateProduct(id, data)
+  - deleteProduct(id)  — check for existing transactions first
+
+backend/src/modules/products/products.controller.ts
+  Full CRUD with pagination response
+
+backend/src/modules/inventory/inventory.service.ts
+  - getInventoryList(page, limit, search, lowStockOnly)
+  - getInventoryByProduct(productId)
+  - getTotalAssetValue()  → sum of (currentQuantity × unitPrice)
+  - getLowStockItems()    → items below minStockLevel
+  - getInventorySummary() → { totalProducts, totalQuantity, totalValue,
+                               lowStockCount, todayIn, todayOut }
+
+backend/src/modules/inventory/inventory.controller.ts
+  - GET /inventory           — paginated list
+  - GET /inventory/summary   — dashboard KPIs
+  - GET /inventory/low-stock — alert list
+  - GET /inventory/:productId
+
+backend/src/modules/transactions/transactions.service.ts
+  - createTransaction(type, productId, quantity, unitPrice, userId, note)
+    → update Inventory.currentQuantity atomically in Prisma transaction
+    → throw error if STOCK_OUT quantity > available
+  - getTransactions(page, limit, type, productId, startDate, endDate)
+  - getTransactionById(id)
+  - getTransactionStats(days)  → daily IN/OUT totals for chart
+
+backend/src/modules/transactions/transactions.controller.ts
+  - POST /transactions        — manual single transaction
+  - GET  /transactions        — paginated + filtered list
+  - GET  /transactions/stats  — chart data
+  - GET  /transactions/:id
+
+backend/src/modules/upload/parsers/excelParser.ts
+  Parse .xlsx / .xls using SheetJS:
+  - Read first sheet
+  - Expect columns: SKU | 品名/Name | 数量/Quantity | 单价/UnitPrice | 备注/Note
+  - Support both Chinese and English column headers
+  - Return array of ParsedRow { sku, name, quantity, unitPrice, note }
+  - Collect per-row errors without stopping entire parse
+
+backend/src/modules/upload/parsers/csvParser.ts
+  Same interface as excelParser but for CSV files
+
+backend/src/modules/upload/parsers/pdfParser.ts
+  - Extract text with pdf-parse
+  - Use regex to find SKU patterns, quantities, prices
+  - Return ParsedRow array with confidence flag
+  - Note: PDF parsing is best-effort; flag uncertain rows
+
+backend/src/modules/upload/upload.service.ts
+  - processUploadFile(filePath, fileType, operatorId, transactionType)
+    1. Select correct parser by fileType
+    2. Parse file → rows[]
+    3. For each row: find or create Product by SKU
+    4. Call transactions.service.createTransaction for each row
+    5. Collect success/fail counts
+    6. Save UploadRecord to DB
+    7. Delete temp file after processing
+    8. Return { batchId, total, success, failed, errors[] }
+
+backend/src/modules/upload/upload.controller.ts
+  - POST /upload/stock-in    — upload file → process as STOCK_IN
+  - POST /upload/stock-out   — upload file → process as STOCK_OUT
+  - GET  /upload/history     — paginated upload records
+  - GET  /upload/template    — download Excel template file
+
+── FRONTEND ───────────────────────────────────────────
+
+frontend/package.json
+  dependencies: react, react-dom, react-router-dom, axios,
+                @tanstack/react-query, zustand, recharts,
+                xlsx, tailwindcss, shadcn/ui components,
+                lucide-react, date-fns, react-dropzone
+  devDependencies: vite, typescript, @vitejs/plugin-react,
+                   tailwindcss, autoprefixer, postcss
+
+frontend/vite.config.ts
+  - Proxy /api → http://localhost:4000
+  - Path alias @ → src
+
+frontend/tailwind.config.ts
+  - Content paths for purging
+  - Extend theme with brand colors
+
+frontend/src/types/index.ts
+  Export ALL TypeScript interfaces:
+  User, Product, Inventory, Transaction, UploadRecord,
+  PaginatedResponse<T>, ApiResponse<T>, TransactionType,
+  InventorySummary, ParsedFileRow, UploadResult
+
+frontend/src/api/client.ts
+  - Axios instance baseURL = /api/v1
+  - Request interceptor: attach Authorization Bearer token
+  - Response interceptor: handle 401 → refresh token → retry
+  - Handle refresh token rotation in Zustand authStore
+
+frontend/src/api/auth.ts      — login, register, refresh, logout
+frontend/src/api/products.ts  — CRUD + pagination
+frontend/src/api/inventory.ts — list, summary, low-stock
+frontend/src/api/transactions.ts — list, create, stats
+frontend/src/api/upload.ts    — uploadStockIn, uploadStockOut,
+                                  getHistory, downloadTemplate
+
+frontend/src/store/authStore.ts
+  Zustand store:
+  - state: user, accessToken, isAuthenticated
+  - actions: setAuth, clearAuth, refreshAuth
+  - persist to localStorage
+
+frontend/src/store/appStore.ts
+  - sidebarOpen, notifications[], addNotification, clearNotification
+
+frontend/src/App.tsx
+  React Router v6 routes:
+  /login              → <Login />         (public)
+  /                   → redirect to /dashboard
+  /dashboard          → <Dashboard />     (protected)
+  /inventory          → <Inventory />     (protected)
+  /stock-in           → <StockIn />       (protected)
+  /stock-out          → <StockOut />      (protected)
+  /transactions       → <Transactions />  (protected)
+  /products           → <Products />      (ADMIN only)
+  /reports            → <Reports />       (protected)
+  Wrap protected routes in <AuthGuard />
+
+frontend/src/components/layout/Sidebar.tsx
+  Navigation links with icons (lucide-react):
+  Dashboard (LayoutDashboard), Inventory (Package),
+  Stock In (PackagePlus), Stock Out (PackageMinus),
+  Transactions (ArrowLeftRight), Products (Boxes), Reports (BarChart3)
+  Show active state, collapse on mobile
+
+frontend/src/components/layout/Header.tsx
+  - Page title, breadcrumb
+  - Notification bell with badge
+  - User avatar dropdown: profile, logout
+
+frontend/src/components/upload/FileUploadZone.tsx
+  - react-dropzone for drag & drop
+  - Accept xlsx, xls, csv, pdf
+  - Show file icon, name, size after selection
+  - Client-side Excel preview using SheetJS before upload
+  - Upload progress bar
+  - Props: onUpload(file), loading, accept
+
+frontend/src/components/upload/FilePreviewTable.tsx
+  - Show first 10 rows parsed from Excel/CSV client-side
+  - Highlight rows with missing SKU or invalid quantity in red
+  - Confirm / Cancel buttons
+  - Props: rows, onConfirm, onCancel
+
+frontend/src/components/inventory/InventoryTable.tsx
+  Full DataTable with:
+  - Columns: SKU, Name, Category, Location, Qty, Unit, UnitPrice,
+             TotalValue, LastUpdated, Status badge
+  - Sort by any column
+  - Search by name/SKU
+  - Filter by category
+  - Low stock rows highlighted in amber
+
+frontend/src/components/charts/StockTrendChart.tsx
+  Recharts LineChart:
+  - X-axis: last 30 days
+  - Two lines: stock-in (green) vs stock-out (red)
+  - Tooltip with formatted values
+  - Responsive container
+
+frontend/src/components/charts/CategoryPieChart.tsx
+  Recharts PieChart:
+  - Distribution of inventory value by category
+  - Custom legend with percentage
+
+frontend/src/components/charts/TransactionBarChart.tsx
+  Recharts BarChart:
+  - Weekly transaction volumes
+  - Grouped bars: IN vs OUT
+
+frontend/src/pages/Dashboard.tsx
+  Layout: 4 KPI cards (top) + 2 charts (middle) + low-stock alert table
+
+  KPI cards (use InventorySummary data):
+  ┌─────────────────┐ ┌─────────────────┐
+  │  Total Products │ │  Total Quantity │
+  └─────────────────┘ └─────────────────┘
+  ┌─────────────────┐ ┌─────────────────┐
+  │  Asset Value    │ │  Low Stock      │
+  └─────────────────┘ └─────────────────┘
+
+  Below cards:
+  - Left: StockTrendChart (30-day)
+  - Right: CategoryPieChart
+
+  Bottom: LowStockAlert table with "Restock" quick action
+
+frontend/src/pages/StockIn.tsx
+  Two tabs:
+  Tab 1 — File Upload:
+    - FileUploadZone
+    - FilePreviewTable (shown after file selected)
+    - Confirm button → POST /upload/stock-in
+    - Download template link
+    - Result summary after processing (success/fail counts)
+
+  Tab 2 — Manual Entry:
+    - Select product (searchable dropdown)
+    - Enter quantity and unit price
+    - Note field
+    - Submit → POST /transactions (type: STOCK_IN)
+
+frontend/src/pages/StockOut.tsx
+  Same structure as StockIn but for STOCK_OUT
+  Add available quantity check before submit
+  Show warning if requested qty > available qty
+
+frontend/src/pages/Inventory.tsx
+  - InventoryTable with full search/filter/sort
+  - Export button → download current view as Excel
+  - Refresh button
+  - Summary bar: total items, total qty, total value
+
+frontend/src/pages/Transactions.tsx
+  - Filter bar: type, date range, product search
+  - Paginated transaction table
+  - Columns: Date, Type badge, SKU, Product, Qty, Unit Price,
+             Total, Operator, Source(manual/file), Note
+  - Export to Excel button
+
+frontend/src/pages/Products.tsx
+  - Product master data CRUD table (ADMIN only)
+  - Add / Edit / Delete product
+  - Form fields: SKU, Name, Category, Unit, Unit Price,
+                 Min Stock Level, Description
+
+frontend/src/pages/Reports.tsx
+  - Date range picker
+  - Summary statistics table
+  - StockTrendChart + TransactionBarChart
+  - Export full report as Excel with multiple sheets:
+    Sheet 1: Summary, Sheet 2: Transactions, Sheet 3: Inventory
+
+── SHARED ─────────────────────────────────────────────
+
+shared/schemas/index.ts
+  Zod schemas for all API request bodies:
+  - loginSchema, registerSchema
+  - createProductSchema, updateProductSchema
+  - createTransactionSchema
+  - uploadQuerySchema (type: STOCK_IN | STOCK_OUT)
+  Export inferred TypeScript types from each schema
+
+── ROOT FILES ──────────────────────────────────────────
+
+docker-compose.yml
+  services:
+    backend:  build: ./backend, ports: 4000:4000, env_file: .env
+    frontend: build: ./frontend, ports: 3000:80
+
+README.md
+  ## Quick Start
+  ### Prerequisites
+  ### Installation (npm install steps)
+  ### Running in Development
+  ### File Upload Format (Excel template columns explained)
+  ### API Documentation (key endpoints listed)
+  ### Environment Variables reference
+
+.gitignore
+  node_modules, dist, .env, uploads/, *.log, prisma/dev.db
+
+═══════════════════════════════════════════════════════
+EXCEL UPLOAD TEMPLATE FORMAT
+═══════════════════════════════════════════════════════
+The system must accept Excel/CSV files with these columns
+(support both Chinese and English headers):
+
+| SKU      | 品名     | 数量     | 单价      | 备注  |
+| sku      | name     | quantity | unitPrice | note  |
+|----------|----------|----------|-----------|-------|
+| PRD-001  | 螺丝钉   | 500      | 0.50      | 采购  |
+| PRD-002  | 轴承     | 20       | 35.00     | 补货  |
+
+Rules:
+- SKU is required and used to match/create Product
+- Rows with missing SKU → skip and log as error
+- Rows with invalid quantity (<=0 or non-numeric) → skip and log
+- All valid rows processed in one DB transaction (all or nothing per row)
+- Return detailed error report per failed row
+
+═══════════════════════════════════════════════════════
+API RESPONSE FORMAT  (enforce everywhere)
+═══════════════════════════════════════════════════════
+Success:
+{
+  "success": true,
+  "message": "操作成功",
+  "data": { ... },
+  "pagination": { "page": 1, "limit": 20, "total": 100, "totalPages": 5 }
+}
+
+Error:
+{
+  "success": false,
+  "message": "错误描述",
+  "errors": [{ "field": "quantity", "message": "必须大于0" }]
+}
+
+═══════════════════════════════════════════════════════
+SEED DATA  (create backend/prisma/seed.ts)
+═══════════════════════════════════════════════════════
+Insert on first run:
+- 1 admin user: admin@wms.com / Admin@123456
+- 1 operator user: operator@wms.com / Oper@123456
+- 10 sample products across 3 categories
+  (Electronics电子, Mechanical机械, Consumables耗材)
+- 30 days of sample transactions for dashboard charts
+
+═══════════════════════════════════════════════════════
+AFTER CREATING ALL FILES, RUN THESE COMMANDS:
+═══════════════════════════════════════════════════════
+cd warehouse-wms/backend && npm install
+cd ../frontend && npm install
+cd ../backend && npx prisma generate && npx prisma migrate dev --name init
+cd ../backend && npx ts-node prisma/seed.ts
+echo "✅ Setup complete. Run: npm run dev in both /backend and /frontend"
+
+═══════════════════════════════════════════════════════
+QUALITY CHECKLIST — verify before finishing
+═══════════════════════════════════════════════════════
+□ Every .ts / .tsx file has zero TypeScript errors
+□ All API routes are protected with auth middleware (except /login /register)
+□ STOCK_OUT validates available quantity before deducting
+□ File upload cleans up temp files after processing
+□ Prisma transactions used for inventory updates (atomic)
+□ Pagination implemented on all list endpoints
+□ Low stock alert visible on dashboard
+□ Excel template downloadable from Stock In page
+□ All forms have loading states and error messages
+□ Mobile responsive layout (sidebar collapses)
+□ README has complete setup instructions
+
+Start now. Create all files in order: shared → backend → frontend.
+Do not ask for confirmation. Implement everything completely.

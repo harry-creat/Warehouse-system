@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/dev.db:/app/dev.db
+    environment:
+      - DATABASE_URL=file:/app/dev.db
+      - JWT_ACCESS_SECRET=production-access-secret-change-me
+      - JWT_REFRESH_SECRET=production-refresh-secret-change-me
+      - PORT=4000
+      - UPLOAD_DIR=/app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

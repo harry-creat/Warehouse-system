@@ -1,0 +1,173 @@
+You are a senior full-stack engineer. Build a complete, production-ready 
+Warehouse Management System (WMS) from scratch.
+
+This is a full system — every file must be fully implemented with real code.
+No placeholders, no "TODO" comments, no mock data in production logic.
+
+═══════════════════════════════════════════════════════
+PROJECT OVERVIEW
+═══════════════════════════════════════════════════════
+Build a Warehouse Inventory Management System that allows users to:
+- Upload order/delivery sheets (Excel, CSV, PDF) to trigger stock IN or OUT
+- Automatically parse uploaded files and update inventory records
+- View real-time inventory dashboard with quantity, unit price, total value
+- Manage stock-in (入库) and stock-out (出库) operations with full history
+- Generate inventory reports and export data
+
+═══════════════════════════════════════════════════════
+TECH STACK  (use exactly these)
+═══════════════════════════════════════════════════════
+Frontend  : React 18 + TypeScript + Vite
+UI        : Tailwind CSS + shadcn/ui
+State     : Zustand
+HTTP      : Axios + React Query (TanStack Query v5)
+Charts    : Recharts
+File Parse: SheetJS (xlsx) for Excel/CSV on frontend preview
+
+Backend   : Node.js + Express + TypeScript
+ORM       : Prisma
+Database  : SQLite (dev) — schema must be compatible with PostgreSQL (prod)
+File Store: Multer + local /uploads folder
+File Parse: xlsx (SheetJS) + pdf-parse on backend
+Auth      : JWT (access token 15min + refresh token 7d)
+Validation: Zod (shared schemas between frontend and backend)
+
+═══════════════════════════════════════════════════════
+COMPLETE PROJECT STRUCTURE
+═══════════════════════════════════════════════════════
+Generate ALL of the following files with full implementation:
+
+warehouse-system/
+├── backend/
+│   ├── src/
+│   │   ├── index.ts                  # Express app entry, middleware setup
+│   │   ├── config/
+│   │   │   └── env.ts                # Environment variables with Zod validation
+│   │   ├── prisma/
+│   │   │   └── schema.prisma         # Full DB schema
+│   │   ├── middleware/
+│   │   │   ├── auth.ts               # JWT verify middleware
+│   │   │   ├── errorHandler.ts       # Global error handler
+│   │   │   └── upload.ts             # Multer config (xlsx, csv, pdf)
+│   │   ├── modules/
+│   │   │   ├── auth/
+│   │   │   │   ├── auth.routes.ts
+│   │   │   │   ├── auth.controller.ts
+│   │   │   │   └── auth.service.ts
+│   │   │   ├── products/
+│   │   │   │   ├── products.routes.ts
+│   │   │   │   ├── products.controller.ts
+│   │   │   │   └── products.service.ts
+│   │   │   ├── inventory/
+│   │   │   │   ├── inventory.routes.ts
+│   │   │   │   ├── inventory.controller.ts
+│   │   │   │   └── inventory.service.ts
+│   │   │   ├── transactions/
+│   │   │   │   ├── transactions.routes.ts
+│   │   │   │   ├── transactions.controller.ts
+│   │   │   │   └── transactions.service.ts
+│   │   │   └── upload/
+│   │   │       ├── upload.routes.ts
+│   │   │       ├── upload.controller.ts
+│   │   │       ├── upload.service.ts  # Core file parsing logic
+│   │   │       └── parsers/
+│   │   │           ├── excelParser.ts
+│   │   │           ├── csvParser.ts
+│   │   │           └── pdfParser.ts
+│   │   └── utils/
+│   │       ├── jwt.ts
+│   │       ├── response.ts           # Unified API response wrapper
+│   │       └── logger.ts
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── .env.example
+│
+├── frontend/
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── App.tsx                   # Router setup
+│   │   ├── api/
+│   │   │   ├── client.ts             # Axios instance with interceptors
+│   │   │   ├── auth.ts
+│   │   │   ├── products.ts
+│   │   │   ├── inventory.ts
+│   │   │   ├── transactions.ts
+│   │   │   └── upload.ts
+│   │   ├── store/
+│   │   │   ├── authStore.ts          # Zustand auth state
+│   │   │   └── appStore.ts           # Global UI state
+│   │   ├── pages/
+│   │   │   ├── Login.tsx
+│   │   │   ├── Dashboard.tsx         # KPI cards + charts
+│   │   │   ├── Inventory.tsx         # Inventory list with search/filter
+│   │   │   ├── StockIn.tsx           # Manual + file upload stock-in
+│   │   │   ├── StockOut.tsx          # Manual + file upload stock-out
+│   │   │   ├── Transactions.tsx      # Full history log
+│   │   │   ├── Products.tsx          # Product master data management
+│   │   │   └── Reports.tsx           # Export + charts
+│   │   ├── components/
+│   │   │   ├── layout/
+│   │   │   │   ├── Sidebar.tsx
+│   │   │   │   ├── Header.tsx
+│   │   │   │   └── Layout.tsx
+│   │   │   ├── upload/
+│   │   │   │   ├── FileUploadZone.tsx  # Drag & drop upload area
+│   │   │   │   ├── FilePreviewTable.tsx # Preview parsed data before confirm
+│   │   │   │   └── UploadProgress.tsx
+│   │   │   ├── inventory/
+│   │   │   │   ├── InventoryTable.tsx
+│   │   │   │   ├── InventoryCard.tsx
+│   │   │   │   └── LowStockAlert.tsx
+│   │   │   ├── charts/
+│   │   │   │   ├── StockTrendChart.tsx  # Line chart: 30-day trend
+│   │   │   │   ├── CategoryPieChart.tsx
+│   │   │   │   └── TransactionBarChart.tsx
+│   │   │   └── common/
+│   │   │       ├── DataTable.tsx
+│   │   │       ├── SearchBar.tsx
+│   │   │       ├── Pagination.tsx
+│   │   │       ├── StatusBadge.tsx
+│   │   │       └── ConfirmDialog.tsx
+│   │   ├── hooks/
+│   │   │   ├── useInventory.ts
+│   │   │   ├── useTransactions.ts
+│   │   │   └── useFileUpload.ts
+│   │   ├── types/
+│   │   │   └── index.ts              # All shared TypeScript types
+│   │   └── utils/
+│   │       ├── formatters.ts         # Currency, date, number formatters
+│   │       └── validators.ts
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.ts
+│   └── tsconfig.json
+│
+├── shared/
+│   └── schemas/
+│       └── index.ts                  # Zod schemas shared by FE + BE
+│
+├── docker-compose.yml
+├── README.md
+└── .gitignore
+
+═══════════════════════════════════════════════════════
+DATABASE SCHEMA  (implement fully in schema.prisma)
+═══════════════════════════════════════════════════════
+Tables required:
+
+User
+  id, username, email, passwordHash, role(ADMIN/OPERATOR/VIEWER)
+  createdAt, updatedAt
+
+Product
+  id, sku(unique), name, category, unit, unitPrice
+  description, imageUrl, minStockLevel(low stock alert threshold)
+  createdAt, updatedAt
+
+Inventory
+  id, productId(FK), warehouseLocation
+  currentQuantity, reservedQuantity, availableQuantity(computed)
+  lastUpdatedAt
+
+Transaction
+  id, type(STOCK_IN / STOCK_OUT /
