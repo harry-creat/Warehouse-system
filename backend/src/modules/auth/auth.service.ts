@@ -49,6 +49,23 @@ export class AuthService {
     const accessToken = generateAccessToken(user.id, user.role);
     return { accessToken };
   }
+
+  async listUsers() {
+    const users = await prisma.user.findMany({
+      select: { id: true, username: true, email: true, role: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return users;
+  }
+
+  async deleteUser(id: string, currentUserId: string) {
+    if (id === currentUserId) {
+      throw Object.assign(new Error('Cannot delete your own account'), { statusCode: 400 });
+    }
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+    await prisma.user.delete({ where: { id } });
+  }
 }
 
 export default new AuthService();

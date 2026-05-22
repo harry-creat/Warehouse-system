@@ -9,6 +9,7 @@ import StockOut from './pages/StockOut';
 import Transactions from './pages/Transactions';
 import Products from './pages/Products';
 import Reports from './pages/Reports';
+import Users from './pages/Users';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="transactions" element={<Transactions />} />
         <Route path="products" element={<AdminGuard><Products /></AdminGuard>} />
         <Route path="reports" element={<Reports />} />
+        <Route path="users" element={<AdminGuard><Users /></AdminGuard>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

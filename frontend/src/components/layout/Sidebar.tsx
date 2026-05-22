@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import { useAuthStore } from '../../store/authStore';
 import {
   LayoutDashboard, Package, PackagePlus, PackageMinus,
-  ArrowLeftRight, Boxes, BarChart3, ChevronLeft,
+  ArrowLeftRight, Boxes, BarChart3, UserCog, ChevronLeft,
 } from 'lucide-react';
 
 const allNavItems = [
@@ -14,6 +14,7 @@ const allNavItems = [
   { to: '/transactions', label: '交易记录', icon: ArrowLeftRight, roles: ['ADMIN', 'OPERATOR', 'VIEWER'] },
   { to: '/products', label: '产品管理', icon: Boxes, roles: ['ADMIN'] },
   { to: '/reports', label: '报表分析', icon: BarChart3, roles: ['ADMIN', 'OPERATOR', 'VIEWER'] },
+  { to: '/users', label: '用户管理', icon: UserCog, roles: ['ADMIN'] },
 ];
 
 export default function Sidebar() {

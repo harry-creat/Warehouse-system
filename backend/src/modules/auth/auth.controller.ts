@@ -32,6 +32,20 @@ export class AuthController {
       return successResponse(res, null, '已退出登录');
     } catch (err) { next(err); }
   };
+
+  listUsers = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const users = await authService.listUsers();
+      return successResponse(res, users);
+    } catch (err) { next(err); }
+  };
+
+  deleteUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await authService.deleteUser(req.params.id, req.user!.userId);
+      return successResponse(res, null, '删除成功');
+    } catch (err) { next(err); }
+  };
 }
 
 export default new AuthController();
